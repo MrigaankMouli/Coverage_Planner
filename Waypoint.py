@@ -1,17 +1,32 @@
 from pymavlink import mavutil
 import time
-import chrono
+import json
 
+def send_local_position(controller, north, east, down=-10):
+    controller.mav.set_position_target_local_ned_send(
+        0,  
+        controller.target_system, controller.target_component,
+        mavutil.mavlink.MAV_FRAME_LOCAL_NED,
+        0b110111111000,
+        north, east, down,  
+        0, 0, 0,
+        0, 0, 0,  
+        0, 0  
+    )
 
-drone = mavutil.mavlink_connection("udpin:127.0.0.1:14550")
+def get_lat_lon(controller):
+    msg = controller.recv_match(type='GLOBAL_POSITION_INT', blocking=True)
+    latitude = msg.lat
+    longitude = msg.lon 
+    return latitude, longitude
 
-drone.wait_heartbeat()
-print("Heartbeat from system(system %u component %u)" % (drone.target_system, drone.target_component))
+controller = mavutil.mavlink_connection("udpin:127.0.0.1:14550")
+controller.wait_heartbeat()
+print("Connected to vehicle")
 
-
-drone.mav.command_long_send(
-    drone.target_system,
-    drone.target_component,
+controller.mav.command_long_send(
+    controller.target_system,
+    controller.target_component,
     mavutil.mavlink.MAV_CMD_DO_SET_MODE,
     0,
     mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
@@ -19,83 +34,54 @@ drone.mav.command_long_send(
     0,0,0,0,0
 )
 
-msg = drone.recv_match(type='COMMAND_ACK',blocking=True)
-print(msg)  
 
-drone.mav.command_long_send(
-    drone.target_system,
-    drone.target_component,
+controller.mav.command_long_send(
+    controller.target_system,
+    controller.target_component,
     mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
-    0,
-    1,
-    0, 
-    0, 0, 0, 0, 0
-)
+    0, 1, 0, 0, 0, 0, 0, 0)
 
-msg = drone.recv_match(type='COMMAND_ACK',blocking=True)
-print(msg)
+time.sleep(1)
 
-drone.mav.command_long_send(
-    drone.target_system,
-    drone.target_component,
+controller.mav.command_long_send(
+    controller.target_system,
+    controller.target_component,
     mavutil.mavlink.MAV_CMD_NAV_TAKEOFF,
-    0,
-    0,
-    0,
-    0,0,0,0,7
+    0, 0, 0, 0, 0, 0, 0, 10
 )
 
-msg = drone.recv_match(type='COMMAND_ACK',blocking=True).result
-print(f"Commmand Result:{msg}")
+print("Takeoff command sent. Waiting for takeoff to complete.")
+time.sleep(10)
 
-while True:
-    msg = drone.recv_match(type=['GLOBAL_POSITION_INT'], blocking=True)
-    relative_alt = msg.relative_alt / 1000.0
-    print(f"Current Relative Altitude: {relative_alt} meters")
-    if relative_alt >=6.5:
-        print("Target Altitude Reached")
-        break
+square_points = [
+    (0, 0),
+    (20, 0),
+    (20, 20),
+    (0, 20),
+    (0, 0)
+]
 
-type_mask = 0b110111111000
+coordinates = []
 
-drone.mav.set_position_target_local_ned_send(
-    10,                           
-    drone.target_system,         
-    drone.target_component,      
-    mavutil.mavlink.MAV_FRAME_LOCAL_NED,  # Frame type
-    int(type_mask),              # Type mask 
-    10, 0, -7,                    # x, y, z positions (in meters)
-    0, 0, 0,                     # vx, vy, vz velocities (Ignored with the Typemask)
-    0, 0, 0,                     # afx, afy, afz accelerations (Ignored with the Typemask)
-    0, 0                          # yaw, yaw_rate (Ignored for now)
-)
+for north, east in square_points:
+    send_local_position(controller, north, east, -10)
+    print(f"Moving to waypoint: North {north}, East {east}, Down -10")
 
-msg = drone.recv_match(type='COMMAND_ACK',blocking=True).result
-print(f"Commmand Result:{msg}")
+    while True:
+        msg = controller.recv_match(type='LOCAL_POSITION_NED', blocking=True)
+        current_north = msg.x
+        current_east = msg.y
+        if abs(current_north - north) < 1.0 and abs(current_east - east) < 1.0:
+            print("Waypoint reached")
+            lat, lon = get_lat_lon(controller)
+            print(f"Current Lat, Lon: {lat}, {lon}")
+            coordinates.append({"lat": lat, "lon": lon})
+            break
+        time.sleep(1)
 
-drone.mav.set_position_target_local_ned_send(
-    10,                           
-    drone.target_system,         
-    drone.target_component,      
-    mavutil.mavlink.MAV_FRAME_LOCAL_NED,  # Frame type
-    int(type_mask),              # Type mask 
-    0, 0, -7,                    # x, y, z positions (in meters)
-    0, 0, 0,                     # vx, vy, vz velocities (Ignored with the Typemask)
-    0, 0, 0,                     # afx, afy, afz accelerations (Ignored with the Typemask)
-    0, 0                          # yaw, yaw_rate (Ignored for now)
-)
-
-
-# time.sleep(7) 
-
-msg = drone.recv_match(type='COMMAND_ACK',blocking=True).result
-print(f"Commmand Result:{msg}")
-
-print("Sending the Land Command")
-
-master.mav.command_long_send(
-    master.target_system,
-    master.target_component,
+controller.mav.command_long_send(
+    controller.target_system,
+    controller.target_component,
     mavutil.mavlink.MAV_CMD_NAV_LAND,
     0,
     0,
@@ -103,14 +89,7 @@ master.mav.command_long_send(
     0,0,0,0,0
 )
 
-time.sleep(7)
+print("Landing initiated.")
 
-msg = master.recv_match(type='COMMAND_ACK',blocking=True)
-print(msg)
-
-while True:
-    print(master.recv_match(type=['GLOBAL_POSITION_INT'], blocking=True).relative_alt/1000)
-    if (master.recv_match(type=['GLOBAL_POSITION_INT'], blocking=True).relative_alt)/1000 <= 0.05:
-        print("Landed Succesfully")
-        break    
-
+with open('coverage_boundary.json', 'w') as json_file:
+    json.dump(coordinates, json_file)
