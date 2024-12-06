@@ -4,8 +4,6 @@ import time
 import os
 
 def monitor_thread_func(controller):
-
-    print("Thread running")
     
     while True:
         msg = controller.recv_match(type=["RC_CHANNELS","HEARTBEAT"],blocking = True)
@@ -28,7 +26,7 @@ def monitor_thread_func(controller):
         time.sleep(0.1)
 
 
-def main():
+def main(): 
     controller = mavutil.mavlink_connection("/dev/ttyACM0")
     controller.wait_heartbeat()
     print("Connected to vehicle")

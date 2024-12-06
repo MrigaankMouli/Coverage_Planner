@@ -5,8 +5,6 @@ import threading
 
 def monitor_thread_func(controller):
 
-    print("Thread running")
-    
     while True:
         msg = controller.recv_match(type=["RC_CHANNELS","HEARTBEAT"],blocking = True)
         if not msg:
