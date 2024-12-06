@@ -43,11 +43,11 @@ def load_home_position(controller):
         controller.target_component,
         mavutil.mavlink.MAV_CMD_REQUEST_MESSAGE,
         0,
-        mavutil.mavlink.MAVLINK_MSG_ID_HOME_POSITION,
+        mavutil.mavlink.MAVLINK_MSG_ID_GLOBAL_POSITION_INT,
         0, 0, 0, 0, 0, 0, 0
     )
     while True:
-        msg = controller.recv_match(type='HOME_POSITION', blocking=True)
+        msg = controller.recv_match(type='GLOBAL_POSITION_INT', blocking=True)
         if msg:
             print(f"Home position loaded: {msg.latitude}, {msg.longitude}")
             return (msg.latitude, msg.longitude, 0)
@@ -70,7 +70,7 @@ def upload_mission(controller, home_pos, vertices):
         mission_items.append(MissionItem(i, current=0, x=vertex['lat'], y=vertex['lon'], z=6))
         print(f"Waypoint {i} added: {vertex['lat']}, {vertex['lon']}")
 
-    mission_items.append(MissionItem(len(vertices), current=0, x=home_pos[0], y=home_pos[1], z=0))
+    mission_items.append(MissionItem(len(vertices), current=0, x=home_pos[0], y=home_pos[1], z=6))
     mission_items[-1].command = mavutil.mavlink.MAV_CMD_NAV_LAND
     print("Landing waypoint added.")
 
