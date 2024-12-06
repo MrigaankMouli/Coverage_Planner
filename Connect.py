@@ -38,7 +38,7 @@ def disarm(controller):
 
 
 def main():
-    controller = mavutil.mavlink_connection("udpin:127.0.0.1:14550")
+    controller = mavutil.mavlink_connection("/dev/ttyACM0")
     controller.wait_heartbeat()
     print("Connected to vehicle")
 
