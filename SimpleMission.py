@@ -1,6 +1,31 @@
 import json
 from pymavlink import mavutil
 import time
+import threading
+
+def monitor_thread_func(controller):
+
+    print("Thread running")
+    
+    while True:
+        msg = controller.recv_match(type=["RC_CHANNELS","HEARTBEAT"],blocking = True)
+        if not msg:
+            continue
+
+        if msg.get_type() == 'HEARTBEAT':
+            mode = mavutil.mode_string_v10(msg)
+            
+            if mode == "POSHOLD":
+                print("Mode set to POSHOLD. Checking Throttle Value...")
+
+                rc_msg = controller.recv_match(type = "RC_CHANNELS",blocking = True)
+                if rc_msg and rc_msg.chan3_raw>1200:
+                    print("Pilot taking over control. Exiting Script.")
+                    os._exit(0)
+                else:
+                    print("Throttle value too low. Control remains with the script")
+        
+        time.sleep(0.1)
 
 class MissionItem:
     def __init__(self, i, current, x, y, z):
@@ -18,7 +43,7 @@ class MissionItem:
         self.z = int(z)
         self.mission_type = 0
 
-def set_speed(controller, speed, speed_type=1):
+def set_speed(controller, speed, speed_type):
     print(f"Setting speed to {speed} of type {speed_type}")
     controller.mav.command_long_send(
         controller.target_system,
@@ -58,19 +83,19 @@ def load_lap_waypoints(file_path):
         data = json.load(f)
         return [{"lat": wp["latitude"], "lon": wp["longitude"]} for wp in data.get("lap_waypoints", [])]
 
-def upload_mission(controller, home_pos, vertices):
+def upload_mission(controller, home_pos, vertices,altitude):
     print("Uploading mission...")
     controller.mav.mission_clear_all_send(controller.target_system, controller.target_component)
     time.sleep(1)
-    mission_items = [MissionItem(0, current=1, x=home_pos[0], y=home_pos[1], z=6)]
+    mission_items = [MissionItem(0, current=1, x=home_pos[0], y=home_pos[1], z=altitude)]
     mission_items[0].command = mavutil.mavlink.MAV_CMD_NAV_TAKEOFF
     print("Takeoff waypoint added.")
 
     for i, vertex in enumerate(vertices[1:], start=1):
-        mission_items.append(MissionItem(i, current=0, x=vertex['lat'], y=vertex['lon'], z=6))
+        mission_items.append(MissionItem(i, current=0, x=vertex['lat'], y=vertex['lon'], z=altitude))
         print(f"Waypoint {i} added: {vertex['lat']}, {vertex['lon']}")
 
-    mission_items.append(MissionItem(len(vertices), current=0, x=home_pos[0], y=home_pos[1], z=6))
+    mission_items.append(MissionItem(len(vertices), current=0, x=home_pos[0], y=home_pos[1], z=altitude))
     mission_items[-1].command = mavutil.mavlink.MAV_CMD_NAV_LAND
     print("Landing waypoint added.")
 
@@ -152,20 +177,27 @@ def start_mission(controller):
     )
 
 def main():
+
     print("Initializing connection...")
     controller = mavutil.mavlink_connection("udpin:127.0.0.1:14550")
     controller.wait_heartbeat()
     print("Connection established.")
+    
+    monitor_thread = threading.Thread(target=monitor_thread_func,args=(controller,),daemon=True)
+    monitor_thread.start()
 
+    print("Setting Air speed")
     set_speed(controller, 0.5, 0)
+    print("Setting Climb Speed")
     set_speed(controller, 0.5, 2)
+    print("Setting Descent Speed")
     set_speed(controller, 0.5, 3)
 
     home_pos = load_home_position(controller)
     lap_waypoints = load_lap_waypoints("Test Mission(I'm scared af).json")
     arm_drone(controller)
-    takeoff_drone(controller, 6)
-    upload_mission(controller, home_pos, lap_waypoints)
+    takeoff_drone(controller,altitude=6)
+    upload_mission(controller, home_pos, lap_waypoints,altitude=6)
     start_mission(controller)
 
     print("Mission complete. Landing...")
