@@ -144,7 +144,7 @@ def main():
     if not arm(controller):
         return
 
-    time.sleep(7)
+    time.sleep(5)
 
     if not takeoff(controller, altitude=3):
         return
@@ -157,22 +157,8 @@ def main():
             print("Target Altitude Reached")
             break
     
-    print("Hovering for five seconds")
-    time.sleep(5)
-
-    if not land(controller):
-        return
-
-    while True:
-        msg = controller.recv_match(type=['GLOBAL_POSITION_INT'], blocking=True)
-        relative_alt = msg.relative_alt / 1000.0
-        print(f"Current Relative Altitude: {relative_alt} meters")
-        if relative_alt == 0:
-            print("Landed Successfully")
-            break
-    
-    if not disarm(controller):
-        return
+    time.sleep(10)
+ 
 
 if __name__ == "__main__":
     main()

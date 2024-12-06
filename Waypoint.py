@@ -2,7 +2,7 @@ from pymavlink import mavutil
 import time
 import json
 
-def send_local_position(controller, north, east, down=-10):
+def send_local_position(controller, north, east, down=-3):
     controller.mav.set_position_target_local_ned_send(
         0,  
         controller.target_system, controller.target_component,
@@ -47,7 +47,7 @@ controller.mav.command_long_send(
     controller.target_system,
     controller.target_component,
     mavutil.mavlink.MAV_CMD_NAV_TAKEOFF,
-    0, 0, 0, 0, 0, 0, 0, 10
+    0, 0, 0, 0, 0, 0, 0, 3
 )
 
 print("Takeoff command sent. Waiting for takeoff to complete.")
@@ -55,23 +55,23 @@ time.sleep(10)
 
 square_points = [
     (0, 0),
-    (20, 0),
-    (20, 20),
-    (0, 20),
+    (2, 0),
+    (2, 2),
+    (0, 2),
     (0, 0)
 ]
 
 coordinates = []
 
 for north, east in square_points:
-    send_local_position(controller, north, east, -10)
-    print(f"Moving to waypoint: North {north}, East {east}, Down -10")
+    send_local_position(controller, north, east, -3)
+    print(f"Moving to waypoint: North {north}, East {east}, Down -3")
 
     while True:
         msg = controller.recv_match(type='LOCAL_POSITION_NED', blocking=True)
         current_north = msg.x
         current_east = msg.y
-        if abs(current_north - north) < 1.0 and abs(current_east - east) < 1.0:
+        if abs(current_north - north) < 0.2 and abs(current_east - east) < 0.2:
             print("Waypoint reached")
             lat, lon = get_lat_lon(controller)
             print(f"Current Lat, Lon: {lat}, {lon}")

@@ -1,8 +1,6 @@
 import json
 from pymavlink import mavutil
-import math
 import time
-from math import radians, sin, cos, sqrt, atan2, degrees, pi, asin
 
 class MissionItem:
     def __init__(self, i, current, x, y, z):
@@ -21,110 +19,25 @@ class MissionItem:
         self.mission_type = 0
 
 def set_speed(controller, speed, speed_type=1):
+    print(f"Setting speed to {speed} of type {speed_type}")
+    controller.mav.command_long_send(
+        controller.target_system,
+        controller.target_component,
+        mavutil.mavlink.MAV_CMD_DO_CHANGE_SPEED,
+        0,
+        speed_type,
+        speed,
+        -1,
+        0, 0, 0, 0
+    )
+    msg = controller.recv_match(type='COMMAND_ACK', blocking=True)
+    if msg.result != mavutil.mavlink.MAV_RESULT_ACCEPTED:
+        print(f"Failed to set speed: {msg.result}")
+    else:
+        print(f"Speed set successfully.")
 
-    try:
-        controller.mav.command_long_send(
-            controller.target_system,
-            controller.target_component,
-            mavutil.mavlink.MAV_CMD_DO_CHANGE_SPEED,
-            0,  
-            speed_type,  
-            speed,       
-            -1,          
-            0, 0, 0, 0   
-        )
-
-        msg = controller.recv_match(type='COMMAND_ACK', blocking=True)
-        if msg.result == mavutil.mavlink.MAV_RESULT_ACCEPTED:
-            print(f"Speed set to {speed} m/s successfully.")
-        else:
-            print(f"Failed to set speed: {msg.result}")
-    except Exception as e:
-        print(f"Error setting speed: {e}")
-
-
-def load_square_vertices_from_json(file_path):
-    with open(file_path, 'r') as f:
-        return json.load(f)
-
-def wait_for_ack(controller, msg_type, timeout=5):
-    start_time = time.time()
-    while time.time() - start_time < timeout:
-        msg = controller.recv_match(type=msg_type, blocking=False)
-        if msg:
-            return msg
-        time.sleep(0.1)
-    print(f"Timeout waiting for {msg_type} acknowledgment")
-    return None
-
-def upload_mission(controller, home_pos, vertices):
-    try:
-        controller.mav.mission_clear_all_send(
-            controller.target_system,
-            controller.target_component
-        )
-        time.sleep(1)
-
-        mission_items = []
-
-        takeoff_item = MissionItem(0, current=1, x=home_pos[0], y=home_pos[1], z=10)
-        takeoff_item.command = mavutil.mavlink.MAV_CMD_NAV_TAKEOFF
-        takeoff_item.param1 = 0
-        takeoff_item.param2 = 0
-        takeoff_item.param3 = 0
-        takeoff_item.param4 = 0
-        mission_items.append(takeoff_item)
-
-        for i, vertex in enumerate(vertices[1:], start=1):
-            lat = vertex['lat']
-            lon = vertex['lon']
-            waypoint_item = MissionItem(i, current=0, x=lat, y=lon, z=10)
-            mission_items.append(waypoint_item)
-
-        land_item = MissionItem(len(vertices), current=0, x=home_pos[0], y=home_pos[1], z=0)
-        land_item.command = mavutil.mavlink.MAV_CMD_NAV_LAND
-        mission_items.append(land_item)
-
-        controller.mav.mission_count_send(
-            controller.target_system,
-            controller.target_component,
-            len(mission_items),
-            0
-        )
-        time.sleep(1)
-
-        for item in mission_items:
-            controller.mav.mission_item_int_send(
-                controller.target_system,
-                controller.target_component,
-                item.seq,
-                item.frame,
-                item.command,
-                item.current,
-                item.auto,
-                item.param1,
-                item.param2,
-                item.param3,
-                item.param4,
-                item.x,
-                item.y,
-                item.z,
-                item.mission_type
-            )
-            time.sleep(0.2)
-
-        print("Mission uploaded successfully")
-        return True
-
-    except Exception as e:
-        print(f"Mission upload error: {e}")
-        return False
-
-def main():
-    controller = mavutil.mavlink_connection("udpin:127.0.0.1:14550")
-    controller.wait_heartbeat()
-    print("Connected to vehicle")
-
+def load_home_position(controller):
+    print("Loading home position...")
     controller.mav.command_long_send(
         controller.target_system,
         controller.target_component,
@@ -133,49 +46,73 @@ def main():
         mavutil.mavlink.MAVLINK_MSG_ID_HOME_POSITION,
         0, 0, 0, 0, 0, 0, 0
     )
-
-    set_speed(controller,speed=0.3,speed_type=0)
-
-    home_pos = None
-    while home_pos is None:
+    while True:
         msg = controller.recv_match(type='HOME_POSITION', blocking=True)
         if msg:
-            home_pos = (msg.latitude, msg.longitude, 0)
-            print(f"Home position: {home_pos[0]/1e7 , home_pos[1]/1e7}")
+            print(f"Home position loaded: {msg.latitude}, {msg.longitude}")
+            return (msg.latitude, msg.longitude, 0)
 
-    square_vertices = load_square_vertices_from_json('coverage_boundary.json')
+def load_lap_waypoints(file_path):
+    print(f"Loading lap waypoints from {file_path}...")
+    with open(file_path, 'r') as f:
+        data = json.load(f)
+        return [{"lat": wp["latitude"], "lon": wp["longitude"]} for wp in data.get("lap_waypoints", [])]
 
-    controller.mav.command_long_send(
-        controller.target_system,
-        controller.target_component,
-        mavutil.mavlink.MAV_CMD_DO_SET_MODE,
-        0,
-        mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
-        4,
-        0,0,0,0,0
-    )
+def upload_mission(controller, home_pos, vertices):
+    print("Uploading mission...")
+    controller.mav.mission_clear_all_send(controller.target_system, controller.target_component)
+    time.sleep(1)
+    mission_items = [MissionItem(0, current=1, x=home_pos[0], y=home_pos[1], z=6)]
+    mission_items[0].command = mavutil.mavlink.MAV_CMD_NAV_TAKEOFF
+    print("Takeoff waypoint added.")
 
-    msg = controller.recv_match(type = "COMMAND_ACK", blocking = True)
-    print(msg)
+    for i, vertex in enumerate(vertices[1:], start=1):
+        mission_items.append(MissionItem(i, current=0, x=vertex['lat'], y=vertex['lon'], z=6))
+        print(f"Waypoint {i} added: {vertex['lat']}, {vertex['lon']}")
 
+    mission_items.append(MissionItem(len(vertices), current=0, x=home_pos[0], y=home_pos[1], z=0))
+    mission_items[-1].command = mavutil.mavlink.MAV_CMD_NAV_LAND
+    print("Landing waypoint added.")
+
+    controller.mav.mission_count_send(controller.target_system, controller.target_component, len(mission_items), 0)
+    time.sleep(1)
+    for item in mission_items:
+        controller.mav.mission_item_int_send(
+            controller.target_system,
+            controller.target_component,
+            item.seq,
+            item.frame,
+            item.command,
+            item.current,
+            item.auto,
+            item.param1,
+            item.param2,
+            item.param3,
+            item.param4,
+            item.x,
+            item.y,
+            item.z,
+            item.mission_type
+        )
+        time.sleep(0.2)
+        print(f"Mission item {item.seq} uploaded.")
+
+def arm_drone(controller):
+    print("Arming drone...")
     controller.mav.command_long_send(
         controller.target_system,
         controller.target_component,
         mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
         0,
         1,
-        0, 
+        0,
         0, 0, 0, 0, 0
     )
-    
-    msg = controller.recv_match(type='COMMAND_ACK', blocking=True)
-    if msg.result != mavutil.mavlink.MAV_RESULT_ACCEPTED:
-        print("Arming Failed")
-        return
-
     time.sleep(2)
+    print("Drone armed.")
 
-
+def takeoff_drone(controller, altitude):
+    print(f"Taking off to {altitude} meters...")
     controller.mav.command_long_send(
         controller.target_system,
         controller.target_component,
@@ -183,52 +120,56 @@ def main():
         0,
         0,
         0,
-        0, 0, 0, 0, 10
+        0, 0, 0, 0, altitude
     )
-
-    msg = controller.recv_match(type='COMMAND_ACK', blocking=True)
-    if msg.result != mavutil.mavlink.MAV_RESULT_ACCEPTED:
-        print(f"Takeoff command failed: {msg.result}")
-        return
-    
     while True:
         msg = controller.recv_match(type=['GLOBAL_POSITION_INT'], blocking=True)
-        relative_alt = msg.relative_alt / 1000.0
-        print(f"Current Relative Altitude: {relative_alt} meters")
-        if relative_alt >=9.5:
-            print("Target Altitude Reached")
+        if msg.relative_alt / 1000.0 >= altitude - 0.5:
             break
+    print(f"Reached {altitude} meters.")
 
-    if not upload_mission(controller, home_pos, square_vertices):
-        print("Mission upload failed")
-        return
-
-    controller.mav.command_long_send(
-        controller.target_system,
-        controller.target_component,
-        mavutil.mavlink.MAV_CMD_MISSION_START,
-        0, 0, 0, 0, 0, 0, 0, 0
-    )
-    time.sleep(1)
-
-    try:
-        while True:
-            msg = controller.recv_match(type='MISSION_CURRENT', blocking=False)
-            if msg:
-                print(f"Current mission item: {msg.seq}")
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("Mission monitoring stopped")
-
+def disarm_drone(controller):
+    print("Disarming drone...")
     controller.mav.command_long_send(
         controller.target_system,
         controller.target_component,
         mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
         0,
         0,
-        0, 0, 0, 0, 0, 0
+        0,
+        0, 0, 0, 0, 0
     )
-    print("Mission completed and vehicle disarmed.")
+    time.sleep(2)
+    print("Drone disarmed.")
+
+def start_mission(controller):
+    print("Starting mission...")
+    controller.mav.command_long_send(
+        controller.target_system,
+        controller.target_component,
+        mavutil.mavlink.MAV_CMD_MISSION_START,
+        0, 0, 0, 0, 0, 0, 0, 0
+    )
+
+def main():
+    print("Initializing connection...")
+    controller = mavutil.mavlink_connection("udpin:127.0.0.1:14550")
+    controller.wait_heartbeat()
+    print("Connection established.")
+
+    set_speed(controller, 0.5, 0)
+    set_speed(controller, 0.5, 2)
+    set_speed(controller, 0.5, 3)
+
+    home_pos = load_home_position(controller)
+    lap_waypoints = load_lap_waypoints("Test Mission(I'm scared af).json")
+    arm_drone(controller)
+    takeoff_drone(controller, 6)
+    upload_mission(controller, home_pos, lap_waypoints)
+    start_mission(controller)
+
+    print("Mission complete. Landing...")
+    disarm_drone(controller)
 
 if __name__ == "__main__":
     main()
