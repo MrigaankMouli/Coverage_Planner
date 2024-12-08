@@ -38,19 +38,11 @@ def disarm(controller):
 
 
 def main():
-    controller = mavutil.mavlink_connection("/dev/ttyACM0")
+    controller = mavutil.mavlink_connection("/dev/ttyUSB0")
     controller.wait_heartbeat()
     print("Connected to vehicle")
 
-    if not arm(controller):
-        print("Arming Failed")
-        return
 
-    time.sleep(4)
-
-    if not disarm(controller):
-        print("Disarming Failed")
-        return
 
 
 if __name__ == "__main__":

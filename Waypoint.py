@@ -54,7 +54,6 @@ print("Takeoff command sent. Waiting for takeoff to complete.")
 time.sleep(10)
 
 square_points = [
-    (0, 0),
     (2, 0),
     (2, 2),
     (0, 2),
@@ -74,8 +73,8 @@ for north, east in square_points:
         if abs(current_north - north) < 0.2 and abs(current_east - east) < 0.2:
             print("Waypoint reached")
             lat, lon = get_lat_lon(controller)
-            print(f"Current Lat, Lon: {lat}, {lon}")
-            coordinates.append({"lat": lat, "lon": lon})
+            print(f"Current Lat, Lon: {lat/1e7}, {lon/1e7}")
+            coordinates.append({"lat": lat/1e7, "lon": lon/1e7})
             break
         time.sleep(1)
 
