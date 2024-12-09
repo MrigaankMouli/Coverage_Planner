@@ -35,7 +35,7 @@ class MissionItem:
         self.current = current
         self.auto = 1
         self.param1 = 3.0
-        self.param2 = 1.0
+        self.param2 = 0.05
         self.param3 = 0.0
         self.param4 = 0.0
         self.x = int(x)
