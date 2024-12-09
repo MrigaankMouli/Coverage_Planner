@@ -4,6 +4,13 @@ import time
 import threading
 
 def monitor_thread_func(controller):
+    """
+    Monitor Thread that gives control to Safety Pilot by killing the script
+
+    The Safety Pilot is only given control if the Flight Mode is POSHOLD 
+    and RC Channel 3(Mapped to Throttle) has a PWM value of above 1350
+
+    """
 
     print("Monitor Thread Running")
 
@@ -19,7 +26,7 @@ def monitor_thread_func(controller):
                 print("Mode set to POSHOLD. Checking Throttle Value...")
 
                 rc_msg = controller.recv_match(type = "RC_CHANNELS",blocking = True)
-                if rc_msg and rc_msg.chan3_raw>1200:
+                if rc_msg and rc_msg.chan3_raw>1350:
                     print("Pilot taking over control. Exiting Script.")
                     os._exit(0)
                 else:
@@ -33,17 +40,27 @@ class MissionItem:
         self.frame = mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT
         self.command = mavutil.mavlink.MAV_CMD_NAV_WAYPOINT
         self.current = current
-        self.auto = 1
-        self.param1 = 3.0
-        self.param2 = 0.04
-        self.param3 = 0.0
-        self.param4 = 0.0
-        self.x = int(x)
-        self.y = int(y)
-        self.z = int(z)
+        self.auto = 1 #AutoContinue to next WP(0 for false, 1 for true)
+        self.param1 = 3.0 #Hold Time in Seconds
+        self.param2 = 0.04 #Acceptance Radius in Metres
+        self.param3 = 1.0 #Pass Radius(1 to Loiter at the WP for duration specified in Param1 and 0 to Pass through the WP)
+        self.param4 = 0.0 #Desired Yaw Angle at the WP
+        self.x = int(x) #Latitude in Lat*1e7 format
+        self.y = int(y) #Longitude in Lon*1e7 format
+        self.z = int(z) #Relative Altitude
         self.mission_type = 0
 
 def set_mode(controller, mode):
+    """
+    Setting the Flight Mode of the Drone
+    3:Auto
+    4:Guided
+    5:Loiter
+    6:RTL
+    9:Land
+    16:PosHold
+
+    """
     try:
         controller.mav.command_long_send(
             controller.target_system,
@@ -61,6 +78,15 @@ def set_mode(controller, mode):
         return False
 
 def set_speed(controller, speed, speed_type):
+    """
+    Setting the speed of the Drone
+    Speed Types-
+    0:Air Speed
+    1:Ground Speed
+    2:Climb Speed
+    3:Descent Speed
+
+    """
     print(f"Setting speed to {speed} of type {speed_type}")
     controller.mav.command_long_send(
         controller.target_system,
@@ -79,7 +105,13 @@ def set_speed(controller, speed, speed_type):
         print(f"Speed set successfully.")
 
 def load_home_position(controller):
-    print("Loading home position...")
+    """
+    Setting the Starting(Home) Position of the Drone
+    as the Arming Position
+    The Drone will Takeoff and Land at this Position
+
+    """
+    print("Loading Starting position...")
     controller.mav.command_long_send(
         controller.target_system,
         controller.target_component,
@@ -95,12 +127,24 @@ def load_home_position(controller):
             return (msg.lat, msg.lon, 0)
 
 def load_lap_waypoints(file_path):
+    """
+    Loading Waypoints from JSON file
+    Latitude is changed to lat*1e7 format
+    Longitude is changed to lon*1e7 format
+
+    """
     print(f"Loading lap waypoints from {file_path}...")
     with open(file_path, 'r') as f:
         data = json.load(f)
         return [{"lat": wp["latitude"]*1e7, "lon": wp["longitude"]*1e7} for wp in data.get("lap_waypoints", [])]
 
-def upload_mission(controller, home_pos, vertices,altitude):
+def upload_mission(controller, home_pos, vertices, altitude):
+    """
+    Uploading Mission to Flight Controller
+    Takeoff and Land is at Arming Position
+    Rest of the Waypoints are loaded from the JSON file
+
+    """
     print("Uploading mission...")
     controller.mav.mission_clear_all_send(controller.target_system, controller.target_component)
     time.sleep(1)
@@ -140,6 +184,10 @@ def upload_mission(controller, home_pos, vertices,altitude):
         print(f"Mission item {item.seq} uploaded.")
 
 def arm_drone(controller):
+    """
+    Arming the Drone
+    
+    """
     print("Arming drone...")
     controller.mav.command_long_send(
         controller.target_system,
@@ -154,6 +202,10 @@ def arm_drone(controller):
     print("Drone armed.")
 
 def takeoff_drone(controller, altitude):
+    """
+    Taking off to Set Altitude
+    
+    """
     print(f"Taking off to {altitude} meters...")
     controller.mav.command_long_send(
         controller.target_system,
@@ -166,6 +218,10 @@ def takeoff_drone(controller, altitude):
     )
 
 def disarm_drone(controller):
+    """
+    Disarming the Drone
+
+    """
     print("Disarming drone...")
     controller.mav.command_long_send(
         controller.target_system,
@@ -180,6 +236,11 @@ def disarm_drone(controller):
     print("Drone disarmed.")
 
 def start_mission(controller):
+    """
+    Starting the Mission
+    Mode is automatically set to AUTO(It should but for some reason we need to manually set it for Cleo)
+    
+    """
     print("Starting mission...")
     controller.mav.command_long_send(
         controller.target_system,
