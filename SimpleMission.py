@@ -34,7 +34,7 @@ class MissionItem:
         self.command = mavutil.mavlink.MAV_CMD_NAV_WAYPOINT
         self.current = current
         self.auto = 1
-        self.param1 = 0.0
+        self.param1 = 3.0
         self.param2 = 1.0
         self.param3 = 0.0
         self.param4 = 0.0
@@ -164,11 +164,6 @@ def takeoff_drone(controller, altitude):
         0,
         0, 0, 0, 0, altitude
     )
-    while True:
-        msg = controller.recv_match(type=['GLOBAL_POSITION_INT'], blocking=True)
-        if msg.relative_alt / 1000.0 >= altitude - 0.5:
-            break
-    print(f"Reached {altitude} meters.")
 
 def disarm_drone(controller):
     print("Disarming drone...")
@@ -196,7 +191,7 @@ def start_mission(controller):
 def main():
 
     print("Initializing connection...")
-    controller = mavutil.mavlink_connection("udpin:127.0.0.1:14550")
+    controller = mavutil.mavlink_connection("/dev/ttyACM0")
     controller.wait_heartbeat()
     print("Connection established.")
     
@@ -207,22 +202,27 @@ def main():
     set_mode(controller,mode=4)
     time.sleep(1)
 
-    print("Setting Air speed")
-    set_speed(controller, 0.5, 0)
-    time.sleep(1)
-    print("Setting Climb Speed")
-    set_speed(controller, 0.5, 2)
-    time.sleep(1)
-    print("Setting Descent Speed")
-    set_speed(controller, 0.2, 3)
-    time.sleep(1)
+    # print("Setting Air speed")
+    # set_speed(controller, 0.05, 0)
+    # time.sleep(1)
+    # print("Setting Climb Speed")
+    # set_speed(controller, 0.3, 2)
+    # time.sleep(1)
+    # print("Setting Descent Speed")
+    # set_speed(controller, 0.1, 3)
+    # time.sleep(1)
 
     home_pos = load_home_position(controller)
-    lap_waypoints = load_lap_waypoints("coverage_waypoints.json")
-    upload_mission(controller, home_pos, lap_waypoints,altitude=6)
+    lap_waypoints = load_lap_waypoints("Test Mission(I'm scared af).json")
+    upload_mission(controller, home_pos, lap_waypoints,altitude=7)
     arm_drone(controller)
-    takeoff_drone(controller,altitude=6)
+    takeoff_drone(controller,altitude=7)
+    time.sleep(2)
+    set_mode(controller,mode=3)
+    time.sleep(2)
     start_mission(controller)
+
+    time.sleep(2000)
 
 if __name__ == "__main__":
     main()
