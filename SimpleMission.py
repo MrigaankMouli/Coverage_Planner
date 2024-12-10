@@ -41,13 +41,13 @@ class MissionItem:
         self.command = mavutil.mavlink.MAV_CMD_NAV_WAYPOINT
         self.current = current
         self.auto = 1 #AutoContinue to next WP(0 for false, 1 for true)
-        self.param1 = 3.0 #Hold Time in Seconds
-        self.param2 = 0.04 #Acceptance Radius in Metres
-        self.param3 = 1.0 #Pass Radius(1 to Loiter at the WP for duration specified in Param1 and 0 to Pass through the WP)
+        self.param1 = 2.0 #Hold Time in Seconds
+        self.param2 = 0.8 #Acceptance Radius in Metres
+        self.param3 = 0.0 #Pass Radius(1 to Loiter at the WP for duration specified in Param1 and 0 to Pass through the WP)
         self.param4 = 0.0 #Desired Yaw Angle at the WP
         self.x = int(x) #Latitude in Lat*1e7 format
         self.y = int(y) #Longitude in Lon*1e7 format
-        self.z = int(z) #Relative Altitude
+        self.z = float(z) #Relative Altitude
         self.mission_type = 0
 
 def set_mode(controller, mode):
@@ -198,8 +198,8 @@ def arm_drone(controller):
         0,
         0, 0, 0, 0, 0
     )
-    time.sleep(2)
     print("Drone armed.")
+    time.sleep(5)
 
 def takeoff_drone(controller, altitude):
     """
@@ -274,16 +274,14 @@ def main():
     # time.sleep(1)
 
     home_pos = load_home_position(controller)
-    lap_waypoints = load_lap_waypoints("Test Mission(I'm scared af).json")
+    lap_waypoints = load_lap_waypoints("CoverageTest.json")
     upload_mission(controller, home_pos, lap_waypoints,altitude=7)
     arm_drone(controller)
     takeoff_drone(controller,altitude=7)
-    time.sleep(2)
+    time.sleep(8)
     set_mode(controller,mode=3)
     time.sleep(2)
     start_mission(controller)
-
-    time.sleep(2000)
-
+    
 if __name__ == "__main__":
     main()

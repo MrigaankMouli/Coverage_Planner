@@ -87,6 +87,7 @@ def arm(controller):
             0, 0, 0, 0, 0, 0
         )
         print("Vehicle armed successfully")
+        time.sleep(6)
         return True
     except Exception as e:
         print(f"Failed to arm vehicle. Error: {e}")
@@ -146,7 +147,8 @@ def land(controller):
 
 def main():
 
-    controller = connect_to_vehicle("udpin:127.0.0.1:14550")
+
+    controller = connect_to_vehicle("/dev/ttyACM0")
 
     if not controller:
         return
@@ -160,35 +162,15 @@ def main():
     if not arm(controller):
         return
 
-    time.sleep(7)
-
-    if not takeoff(controller, altitude=3):
+    if not takeoff(controller, altitude=7):
         return
-
-    while True:
-        msg = controller.recv_match(type=['GLOBAL_POSITION_INT'], blocking=True)
-        relative_alt = msg.relative_alt / 1000.0
-        print(f"Current Relative Altitude: {relative_alt} meters")
-        if relative_alt >=2.5:
-            print("Target Altitude Reached")
-            break
     
     print("Hovering for five seconds")
-    time.sleep(5)
+    time.sleep(20)
 
     if not land(controller):
         return
 
-    while True:
-        msg = controller.recv_match(type=['GLOBAL_POSITION_INT'], blocking=True)
-        relative_alt = msg.relative_alt / 1000.0
-        print(f"Current Relative Altitude: {relative_alt} meters")
-        if relative_alt == 0:
-            print("Landed Successfully")
-            break
     
-    if not disarm(controller):
-        return
-
 if __name__ == "__main__":
     main()

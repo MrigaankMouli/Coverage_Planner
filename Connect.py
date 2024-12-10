@@ -38,7 +38,7 @@ def disarm(controller):
 
 
 def main():
-    controller = mavutil.mavlink_connection("/dev/ttyUSB0")
+    controller = mavutil.mavlink_connection("/dev/ttyACM0")
     controller.wait_heartbeat()
     print("Connected to vehicle")
 
